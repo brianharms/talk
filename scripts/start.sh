@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Start the /talk listener.
-# - Ensures the dispatch server is running on :9876 (auto-starts if not).
+# - Ensures the dispatch server is running on :9879 (auto-starts if not).
 # - Spawns voice-listener as a background daemon, recording its PID.
 #
 # If /talk started dispatch itself, it writes .dispatch.pid + .dispatch.owned
@@ -87,16 +87,19 @@ if [ -f "$PID_FILE" ]; then
     rm -f "$PID_FILE"
 fi
 
-# 2) Ensure dispatch server is up. We probe localhost first; if that doesn't
-#    answer, dispatch isn't running OR is bound to a non-localhost address
-#    (e.g. Tailscale only). Either way we (re)start it on --lan so localhost
-#    works AND iPhone clients on the LAN/Tailnet still reach it.
+# 2) Ensure dispatch server is up. dispatch types into iTerm and what it types
+#    gets run, so it listens on THIS Mac only unless remote access is opted
+#    into: dispatch's --lan / --tailscale flags, or a one-word file
+#    ~/.config/dispatch/remote ("lan" or "tailscale"). In remote mode other
+#    devices (e.g. the Dispatch iPhone app) must send the shared secret from
+#    ~/.config/dispatch/token. talk always reaches dispatch from this Mac, so
+#    it never needs the token. Never start dispatch with --lan from here.
 NEED_DISPATCH_START=0
-if curl -fs -m 0.5 http://127.0.0.1:9876/ping >/dev/null 2>&1; then
+if curl -fs -m 0.5 http://127.0.0.1:9879/ping >/dev/null 2>&1; then
     : # localhost works, leave it alone
 elif pgrep -f dispatch_server.py >/dev/null 2>&1; then
     echo "talk: dispatch is running but not reachable on localhost — leaving it as-is"
-    echo "      (if /talk fails to talk to it, restart dispatch with --lan)"
+    echo "      (if /talk can't reach it, stop dispatch and run this again)"
 else
     NEED_DISPATCH_START=1
 fi
@@ -124,8 +127,10 @@ if [ "$NEED_DISPATCH_START" -eq 1 ]; then
     fi
     echo "talk: starting dispatch server..."
     cd "$DISPATCH_DIR" || exit 1
-    nohup "$DISPATCH_PY" -u "$DISPATCH_SCRIPT" --lan \
-        >"$DISPATCH_LOG" 2>&1 &
+    # No bind flag: dispatch picks localhost, or the remote mode opted into
+    # in ~/.config/dispatch/remote. stdin from /dev/null so it never prompts.
+    nohup "$DISPATCH_PY" -u "$DISPATCH_SCRIPT" \
+        </dev/null >"$DISPATCH_LOG" 2>&1 &
     DISPATCH_PID=$!
     echo "$DISPATCH_PID" > "$DISPATCH_PID_FILE"
     # Sentinel that says "we started dispatch" — stop.sh checks this before
@@ -133,10 +138,10 @@ if [ "$NEED_DISPATCH_START" -eq 1 ]; then
     # manually.
     : > "$DISPATCH_OWNED_FILE"
     for _ in 1 2 3 4 5 6 7 8 9 10; do
-        if curl -fs -m 0.5 http://127.0.0.1:9876/ping >/dev/null 2>&1; then break; fi
+        if curl -fs -m 0.5 http://127.0.0.1:9879/ping >/dev/null 2>&1; then break; fi
         sleep 0.3
     done
-    if ! curl -fs -m 0.5 http://127.0.0.1:9876/ping >/dev/null 2>&1; then
+    if ! curl -fs -m 0.5 http://127.0.0.1:9879/ping >/dev/null 2>&1; then
         echo "talk: ERROR — dispatch failed to come up. Log:"
         tail -20 "$DISPATCH_LOG" 2>/dev/null || true
         rm -f "$DISPATCH_PID_FILE" "$DISPATCH_OWNED_FILE"

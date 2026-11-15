@@ -5,7 +5,7 @@ description: Toggle voice-to-iTerm dictation. Speak naturally; 2.5s of silence f
 
 Toggle a background mic listener that transcribes speech via Apple's on-device Speech framework, shows live partials in the dispatch HUD anchored to the active iTerm window, and on 2.5 seconds of silence types the buffered transcript into the currently active iTerm2 pane (followed by Enter).
 
-This skill uses the dispatch server (port 9876) for window cycling, text injection, the floating dictation HUD, and the per-window status badge.
+This skill uses the dispatch server (port 9879) for window cycling, text injection, the floating dictation HUD, and the per-window status badge.
 
 `/talk on` auto-starts the dispatch server if it isn't running, and `/talk off` stops it again — but only if /talk was the one that started it. If dispatch was already running before /talk on (e.g. the user has it on for the iPhone), /talk off leaves it alone.
 
@@ -15,7 +15,7 @@ Parse the user's argument and act accordingly. Default with no argument is **tog
 
 ### `on`
 1. Run `bash ~/.claude/skills/talk/scripts/start.sh` (foreground, NOT `run_in_background`).
-2. Script ensures dispatch is reachable on `localhost:9876` (starts it on `--lan` if not), spawns the listener daemon, records both PIDs.
+2. Script ensures dispatch is reachable on `localhost:9879` (starts it if not, listening on this Mac only unless remote access was opted into in `~/.config/dispatch/remote`), spawns the listener daemon, records both PIDs. Never start dispatch with `--lan` from here.
 3. Report the script's stdout verbatim.
 
 ### `on <mic-name>` or just `<mic-name>` (e.g. `/talk on AirPods`, `/talk AirPods`, `/talk MacBook`, `/talk auto`)

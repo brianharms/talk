@@ -29,7 +29,7 @@ import AppKit
 // MARK: - Configuration
 
 // Dispatch host is discovered at startup (see findDispatchHost()).
-var DISPATCH_HOST = "http://127.0.0.1:9876"
+var DISPATCH_HOST = "http://127.0.0.1:9879"
 let SILENCE_FLUSH_SECONDS: TimeInterval = 2.5
 
 // Voice-command trigger phrases for window cycling. Matched as a regex
@@ -394,15 +394,15 @@ func pingHost(_ host: String, timeout: TimeInterval = 0.5) -> Bool {
     return ok
 }
 
-// Find the dispatch server. It binds port 9876 on either 127.0.0.1, the LAN
+// Find the dispatch server. It binds port 9879 on either 127.0.0.1, the LAN
 // IP, or the Tailscale IP depending on how it was started. Probe candidates.
 func findDispatchHost() -> String? {
-    var candidates: [String] = ["http://127.0.0.1:9876"]
+    var candidates: [String] = ["http://127.0.0.1:9879"]
 
     // `lsof` tells us exactly what address dispatch is bound to.
     let proc = Process()
     proc.launchPath = "/usr/sbin/lsof"
-    proc.arguments = ["-nP", "-iTCP:9876", "-sTCP:LISTEN"]
+    proc.arguments = ["-nP", "-iTCP:9879", "-sTCP:LISTEN"]
     let pipe = Pipe()
     proc.standardOutput = pipe
     proc.standardError = Pipe()
@@ -412,10 +412,10 @@ func findDispatchHost() -> String? {
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         let out = String(data: data, encoding: .utf8) ?? ""
         for line in out.split(separator: "\n") {
-            // e.g. "Python  16852 ... TCP 100.x.y.z:9876 (LISTEN)"
-            if let range = line.range(of: #"(\d+\.\d+\.\d+\.\d+):9876"#, options: .regularExpression) {
+            // e.g. "Python  16852 ... TCP 100.x.y.z:9879 (LISTEN)"
+            if let range = line.range(of: #"(\d+\.\d+\.\d+\.\d+):9879"#, options: .regularExpression) {
                 let m = String(line[range])
-                let host = "http://" + m.replacingOccurrences(of: ":9876", with: "") + ":9876"
+                let host = "http://" + m.replacingOccurrences(of: ":9879", with: "") + ":9879"
                 if !candidates.contains(host) { candidates.append(host) }
             }
         }

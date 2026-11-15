@@ -42,7 +42,7 @@ Honesty about maturity: this is a personal tool that works well day-to-day, but 
 - **Terminal:** iTerm2 — text injection, window cycling, and the status badge all target iTerm2 specifically.
 - **Permissions:** **Microphone** and **Speech Recognition** must be granted to the compiled `voice-listener` binary on first run.
 - **Code signing:** ad-hoc signing is mandatory. On macOS 26, TCC silently delivers all-zero audio buffers to unsigned binaries — the mic callback fires but every sample is 0. `build.sh` handles this with `xattr -cr` + `codesign --force --sign -`.
-- **Sibling vibekit repo:** [**dispatch**](https://github.com/brianharms/dispatch) — the HUD / window-cycling / text-injection server. `talk` will not function without it. dispatch listens on **port 9876** and is located via the `DISPATCH_DIR` env var (defaults to `~/dispatch`).
+- **Sibling vibekit repo:** [**dispatch**](https://github.com/brianharms/dispatch) — the HUD / window-cycling / text-injection server. `talk` will not function without it. dispatch listens on **port 9879** and is located via the `DISPATCH_DIR` env var (defaults to `~/dispatch`).
 
 ## Setup / Install
 
@@ -67,7 +67,7 @@ bash scripts/start.sh
 On first run, `start.sh`:
 - looks for the dispatch server at `$DISPATCH_DIR` (default `~/dispatch`);
 - if it's missing, **clones `github.com/brianharms/dispatch` automatically** (dispatch is Python-stdlib-only and needs no config, so this just works);
-- starts dispatch, then spawns the voice listener.
+- starts dispatch (listening on this Mac only — see Security below), then spawns the voice listener.
 
 macOS will prompt for **Microphone** and **Speech Recognition** — approve both. (This system permission dialog is the one step that genuinely requires a human click; everything else is automatic. Because the binary is ad-hoc signed, the grant survives recompiles.)
 
@@ -78,7 +78,11 @@ export DISPATCH_DIR="$HOME/path/to/your/dispatch"
 bash scripts/start.sh
 ```
 
-**Optional — remote access (iPhone over Tailscale).** Basic local dictation needs no secrets. Only if you want to reach dispatch from another device do you follow dispatch's own README to set its `.env`/Tailscale config — that lives entirely in the dispatch repo, not here. `talk` stores no secrets; it auto-discovers dispatch on `127.0.0.1`, the LAN IP, or a Tailscale IP via an `lsof` probe of port 9876.
+**Optional — remote access (dispatch's iPhone app).** Basic local dictation needs no secrets and nothing listening on the network. Only if you also want dispatch's iPhone app to reach this Mac, opt in once on the Mac — `mkdir -p ~/.config/dispatch && echo tailscale > ~/.config/dispatch/remote` (or `lan`) — and build the app with your token as dispatch's README describes. `talk` stores no secrets and never needs the token: it always talks to dispatch from this Mac, auto-discovering it on `127.0.0.1`, the LAN IP, or a Tailscale IP via an `lsof` probe of port 9879.
+
+### Security
+
+dispatch types into your terminal and the terminal runs what it's given, so `talk` never exposes it: `start.sh` starts dispatch with no bind flag, which means localhost only unless you opted into remote access. In remote mode dispatch only accepts requests from other devices that are signed with the shared token, refuses anything from a web browser, and blocks DNS rebinding. Details: [dispatch → Security](https://github.com/brianharms/dispatch#security).
 
 ## Usage
 
@@ -147,7 +151,7 @@ talk/
 
 - `bin/voice-listener.swift` — the whole listener: speech recognition, silence-flush timer, voice-command regex matching, HUD anchoring, badge writes, and recognizer-resilience logic. Configuration constants are at the top (`DISPATCH_HOST`, `SILENCE_FLUSH_SECONDS`, the trigger regexes, badge strings).
 - `scripts/start.sh` / `scripts/stop.sh` — process lifecycle and dispatch ownership.
-- `SKILL.md` — describes intended behavior end to end. When code and `SKILL.md` disagree, the code is reality (the port is **9876** consistently across SKILL.md, the scripts, and the Swift source — matching the dispatch server's fixed port).
+- `SKILL.md` — describes intended behavior end to end. When code and `SKILL.md` disagree, the code is reality (the port is **9879** consistently across SKILL.md, the scripts, and the Swift source — matching the dispatch server's fixed port).
 
 **Build / run / test:**
 
@@ -163,7 +167,8 @@ There is no automated test suite; verification is manual — start it, speak, co
 **Invariants — do not break these:**
 
 - **Keep the `DISPATCH_DIR` override.** `start.sh` must resolve dispatch via `DISPATCH_DIR` (default `~/dispatch`) and never hardcode an absolute path. Public code must stay path-parameterized.
-- **Keep port 9876.** This MUST match the dispatch server's hardcoded port (`PORT = 9876` in dispatch_server.py, no override). The listener and dispatch communicate on **9876** (Swift `DISPATCH_HOST`, the `lsof -iTCP:9876` probe, and the `start.sh` health checks all assume it). Change it in exactly one place and it breaks the others — don't.
+- **Keep port 9879.** This MUST match the dispatch server's hardcoded port (`PORT = 9879` in dispatch_server.py, no override). The listener and dispatch communicate on **9879** (Swift `DISPATCH_HOST`, the `lsof -iTCP:9879` probe, and the `start.sh` health checks all assume it). Change it in exactly one place and it breaks the others — don't.
+- **Never open dispatch to the network from talk.** `start.sh` must start dispatch with no bind flag (localhost, or whatever the user opted into in `~/.config/dispatch/remote`) and with stdin from `/dev/null`. Never add `--lan`, `--tailscale` or `--bind` here, and never send dispatch's token from talk — the listener only ever calls dispatch on this Mac.
 - **Never weaken signing.** Always `xattr -cr` + `codesign --force --sign -` after compiling. Dropping ad-hoc signing reintroduces the macOS 26 all-zero-audio-buffer bug. Do not "simplify" `build.sh` by removing these steps.
 - **Don't `audioEngine.reset()` in recovery.** Engine recovery rebuilds the engine deliberately without `reset()` because `reset()` corrupts the input format. Preserve that.
 - **Preserve dispatch ownership semantics.** `start.sh` writes `.dispatch.owned` only when *it* started dispatch; `stop.sh` stops dispatch only if that marker exists. Never make `stop.sh` unconditionally kill dispatch — the user may run it for other clients (e.g. iPhone over Tailscale).
